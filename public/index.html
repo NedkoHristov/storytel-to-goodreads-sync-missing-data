@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Storytel → Goodreads Validator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script
+      src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"
+      defer
+    ></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="bg-texture" aria-hidden="true"></div>
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Collection utilities</p>
+        <h1>Find Storytel listens missing from Goodreads</h1>
+        <p class="lede">
+          Upload the latest CSV exports from each service, focus on a specific
+          time period, search the results, and export the missing books so you
+          can import them back into Goodreads.
+        </p>
+      </div>
+      <div class="hero-card">
+        <p>Workflow</p>
+        <ol>
+          <li>Drop in both exports.</li>
+          <li>Select the columns to compare.</li>
+          <li>Filter by date, search, then export the gap.</li>
+        </ol>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel" id="upload-panel">
+        <div class="panel-heading">
+          <h2>1 · Upload and map columns</h2>
+          <p>Provide both CSV files and tell the tool which columns contain the essentials.</p>
+        </div>
+        <div class="export-links">
+          <a href="https://www.goodreads.com/review/import" target="_blank" rel="noreferrer noopener">
+            Download Goodreads CSV
+          </a>
+          <a href="https://account.storytel.com/bg/bg/account/listening-history" target="_blank" rel="noreferrer noopener">
+            Download Storytel history
+          </a>
+        </div>
+        <div class="upload-grid">
+          <article class="upload-card" data-source="goodreads">
+            <div class="card-heading">
+              <div>
+                <h3>Goodreads export</h3>
+                <p>Usually <em>library_export.csv</em></p>
+              </div>
+              <span class="tag">Reference</span>
+            </div>
+            <label class="dropzone">
+              <input type="file" accept=".csv" id="goodreads-input" />
+              <span>Drag & drop or click to upload</span>
+            </label>
+            <p class="file-name" id="goodreads-file">No file yet</p>
+            <p class="status" id="goodreads-status">Awaiting file</p>
+            <div class="select-grid" aria-live="polite">
+              <label>
+                Title column
+                <select id="goodreads-title"></select>
+              </label>
+              <label>
+                Author column
+                <select id="goodreads-author"></select>
+              </label>
+              <label>
+                Finished date column
+                <select id="goodreads-date"></select>
+              </label>
+            </div>
+          </article>
+
+          <article class="upload-card" data-source="storytel">
+            <div class="card-heading">
+              <div>
+                <h3>Storytel history</h3>
+                <p>Export from <em>History → Download</em></p>
+              </div>
+              <span class="tag accent">Source of truth</span>
+            </div>
+            <label class="dropzone">
+              <input type="file" accept=".csv" id="storytel-input" />
+              <span>Drag & drop or click to upload</span>
+            </label>
+            <p class="file-name" id="storytel-file">No file yet</p>
+            <p class="status" id="storytel-status">Awaiting file</p>
+            <div class="select-grid" aria-live="polite">
+              <label>
+                Title column
+                <select id="storytel-title"></select>
+              </label>
+              <label>
+                Author column
+                <select id="storytel-author"></select>
+              </label>
+              <label>
+                Started date column
+                <select id="storytel-started"></select>
+              </label>
+              <label>
+                Duration (seconds) column
+                <select id="storytel-duration"></select>
+              </label>
+              <label>
+                Finished date column
+                <select id="storytel-date"></select>
+              </label>
+            </div>
+            <p class="hint">Storytel exports skip author names—leave that dropdown blank if it is missing.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel" id="filters-panel">
+        <div class="panel-heading">
+          <h2>2 · Choose the time slice</h2>
+          <p>Limit the Storytel listens you care about, then run the comparison.</p>
+        </div>
+        <div class="filters-grid">
+          <label>
+            Start date
+            <input type="date" id="start-date" />
+          </label>
+          <label>
+            End date
+            <input type="date" id="end-date" />
+          </label>
+          <div class="action-row">
+            <button id="compare-btn" disabled>Compare libraries</button>
+            <p id="comparison-status" aria-live="polite">Waiting for uploads</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="results-panel">
+        <div class="panel-heading">
+          <h2>3 · Investigate the missing books</h2>
+          <p>Search within the Storytel items that did not show up in Goodreads.</p>
+        </div>
+        <div class="results-controls">
+          <label class="search">
+            <span>Search titles or authors</span>
+            <input type="search" id="search-input" placeholder="Search missing books" disabled />
+          </label>
+        </div>
+        <div class="stats" id="stats">
+          <div>
+            <p class="stat-label">Storytel listens in window</p>
+            <p class="stat-value" id="storytel-count">0</p>
+          </div>
+          <div>
+            <p class="stat-label">Missing from Goodreads</p>
+            <p class="stat-value" id="missing-count">0</p>
+          </div>
+          <div>
+            <p class="stat-label">Last comparison</p>
+            <p class="stat-value" id="last-run">—</p>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>
+                  <button type="button" class="sort-btn" data-sort="title">
+                    Title
+                    <span class="sort-indicator" data-field="title"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="sort-btn" data-sort="duration">
+                    Duration
+                    <span class="sort-indicator" data-field="duration"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="sort-btn" data-sort="started">
+                    Started
+                    <span class="sort-indicator" data-field="started"></span>
+                  </button>
+                </th>
+                <th>
+                  <button type="button" class="sort-btn" data-sort="date">
+                    Finished
+                    <span class="sort-indicator" data-field="date"></span>
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="results-body">
+              <tr>
+                <td colspan="5" class="empty-state">
+                  Upload both CSV files and run a comparison to see results.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Built for quick validation &middot; data stays in your browser.
+      </p>
+    </footer>
+  </body>
+</html>

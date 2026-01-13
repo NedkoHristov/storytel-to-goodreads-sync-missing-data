@@ -1,0 +1,14 @@
+{
+  "name": "storytel-to-goodreads-sync-missing-data",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Web app to compare Storytel history with Goodreads exports and highlight missing books.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "compression": "^1.7.4",
+    "express": "^4.18.2"
+  }
+}
