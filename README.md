@@ -4,7 +4,7 @@ Client-side web app that highlights Storytel listens that never made it into Goo
 
 ## Features
 
-- Dual CSV uploads with column mapping helpers for Goodreads and Storytel exports
+- Dual CSV uploads with automatic column detection for Goodreads and Storytel exports
 - Date-range filtering that narrows the Storytel window before comparison
 - Smart title/author normalization to reduce formatting mismatches
 - Inline format checks, file-name display, and quick links to generate the CSV exports
@@ -33,4 +33,4 @@ Visit http://localhost:4173 once the container is up.
 
 1. Export your Goodreads library (desktop site → Profile → "Export Library").
 2. Export Storytel history from the History page.
-3. After uploading, pick the matching columns: Goodreads needs Title, Author, and Finished Date, while Storytel supports Title, optional Author, Started Date, Duration (seconds), and Finished Date. The app will auto-guess common header names.
+3. After uploading, the app auto-detects the key columns (Goodreads: Title/Author/Finished; Storytel: Title plus optional Author, Started, Duration, and Finished). You'll see a warning if anything essential is missing.

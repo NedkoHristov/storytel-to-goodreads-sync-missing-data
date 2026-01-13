@@ -3,25 +3,15 @@ const datasetConfig = {
     inputId: "goodreads-input",
     statusId: "goodreads-status",
     fileLabelId: "goodreads-file",
-    selects: {
-      title: "goodreads-title",
-      author: "goodreads-author",
-      date: "goodreads-date",
-    },
     requiredFields: ["title", "author", "date"],
+    supportedFields: ["title", "author", "date"],
   },
   storytel: {
     inputId: "storytel-input",
     statusId: "storytel-status",
     fileLabelId: "storytel-file",
-    selects: {
-      title: "storytel-title",
-      author: "storytel-author",
-      duration: "storytel-duration",
-      started: "storytel-started",
-      date: "storytel-date",
-    },
     requiredFields: ["title", "date"],
+    supportedFields: ["title", "author", "started", "duration", "date"],
   },
 };
 
@@ -42,14 +32,37 @@ const heuristics = {
   duration: ["duration", "seconds"],
 };
 
+const datasetColumnHints = {
+  goodreads: {
+    title: ["Title"],
+    author: ["Author"],
+    date: ["Date Read"],
+  },
+  storytel: {
+    title: ["Book Title"],
+    author: ["Book Author"],
+    started: ["Bookmark Insert Time", "Start Time"],
+    duration: ["Book Duration In Seconds", "Duration", "Listening Time"],
+    date: ["Last Bookmark Update Time", "Bookmark Update Time", "Finished"],
+  },
+};
+
+const fieldLabels = {
+  title: "Title",
+  author: "Author",
+  date: "Finished",
+  started: "Started",
+  duration: "Duration",
+};
+
 const state = {
   datasets: {
-    goodreads: { rows: [], headers: [], fileName: "", detectedFormat: null },
-    storytel: { rows: [], headers: [], fileName: "", detectedFormat: null },
+    goodreads: { rows: [], headers: [], fileName: "", detectedFormat: null, mapping: {} },
+    storytel: { rows: [], headers: [], fileName: "", detectedFormat: null, mapping: {} },
   },
   missing: [],
   storytelWindowCount: 0,
-  lastRunTs: null,
+  missingDurationSeconds: 0,
   searchTerm: "",
   sortField: "title",
   sortDirection: "asc",
@@ -80,24 +93,39 @@ function init() {
         .then(({ rows, headers }) => {
           const detectedFormat = detectFormat(headers);
           const formatValid = detectedFormat === key;
+          const mapping = deriveColumnMapping(key, headers);
+          const required = datasetConfig[key].requiredFields || [];
+          const missingRequired = required.filter((field) => !mapping[field]);
           state.datasets[key] = {
             rows,
             headers,
             fileName: file.name,
             detectedFormat,
             formatValid,
+            mapping,
           };
           const formatSummary = formatValid
             ? `Format check passed (${formatDisplayName(key)})`
             : `Format mismatch · looks like ${formatDisplayName(
                 detectedFormat
               )}`;
+          const summaryParts = [
+            `Loaded ${rows.length.toLocaleString()} rows · ${headers.length} columns`,
+            formatSummary,
+          ].filter(Boolean);
+          if (missingRequired.length) {
+            summaryParts.push(
+              `Missing required: ${missingRequired
+                .map((field) => toFieldLabel(field))
+                .join(", ")}`
+            );
+          }
+          const statusVariant = !formatValid || missingRequired.length ? "warn" : "success";
           setStatusMessage(
             key,
-            `Loaded ${rows.length.toLocaleString()} rows · ${headers.length} columns · ${formatSummary}`,
-            formatValid ? "success" : "warn"
+            summaryParts.join(" · "),
+            statusVariant
           );
-          populateSelectors(key, headers);
           maybeAutoCompare();
         })
         .catch((error) => {
@@ -108,15 +136,10 @@ function init() {
             fileName: file.name,
             detectedFormat: null,
             formatValid: false,
+            mapping: {},
           };
           setStatusMessage(key, "Failed to parse file", "error");
         });
-    });
-
-    Object.values(config.selects).forEach((selectId) => {
-      const select = document.getElementById(selectId);
-      disableSelect(select);
-      select.addEventListener("change", maybeAutoCompare);
     });
   });
 
@@ -139,11 +162,6 @@ function init() {
   });
 
   updateSortIndicators();
-}
-
-function disableSelect(select) {
-  select.innerHTML = `<option value="">Select column</option>`;
-  select.disabled = true;
 }
 
 function setFileName(dataset, name) {
@@ -193,33 +211,6 @@ function sanitizeRow(row) {
   );
 }
 
-function populateSelectors(dataset, headers) {
-  const config = datasetConfig[dataset];
-  Object.entries(config.selects).forEach(([field, selectId]) => {
-    const select = document.getElementById(selectId);
-    select.disabled = false;
-    const isRequired = config.requiredFields?.includes(field) ?? true;
-    const placeholder = isRequired
-      ? "Select column"
-      : "Skip if not available";
-    select.innerHTML = `<option value="">${placeholder}</option>`;
-    headers.forEach((header) => {
-      const option = document.createElement("option");
-      option.value = header;
-      option.textContent = header;
-      select.appendChild(option);
-    });
-    const guess = headers.find((header) =>
-      (heuristics[field] || []).some((keyword) =>
-        header.toLowerCase().includes(keyword)
-      )
-    );
-    if (guess) {
-      select.value = guess;
-    }
-  });
-}
-
 function detectFormat(headers = []) {
   const normalized = headers.map((header) => header.toLowerCase().trim());
   const matchesSignature = (key) =>
@@ -246,8 +237,15 @@ function formatDisplayName(key) {
 }
 
 function maybeAutoCompare() {
-  const ready = isReadyForComparison();
+  const startDate = parseDateInput(startDateInput.value);
+  const endDate = parseEndDateInput(endDateInput.value);
+  const dateRangeValid = isDateRangeValid(startDate, endDate);
+  const ready = dateRangeValid && isReadyForComparison();
   compareBtn.disabled = !ready;
+  if (!dateRangeValid) {
+    statusEl.textContent = "Invalid date range · start date must be on or before end date";
+    return;
+  }
   if (ready) {
     statusEl.textContent = "Ready · running comparison";
     runComparison();
@@ -258,23 +256,17 @@ function maybeAutoCompare() {
 
 function isReadyForComparison() {
   return ["goodreads", "storytel"].every((dataset) => {
-    const { rows } = state.datasets[dataset];
+    const { rows, mapping } = state.datasets[dataset];
     if (!rows.length) {
       return false;
     }
-    const mapping = getMapping(dataset);
     const required = datasetConfig[dataset].requiredFields || [];
     return required.every((field) => mapping[field]);
   });
 }
 
 function getMapping(dataset) {
-  const config = datasetConfig[dataset];
-  const mapping = {};
-  Object.entries(config.selects).forEach(([field, selectId]) => {
-    mapping[field] = document.getElementById(selectId)?.value ?? "";
-  });
-  return mapping;
+  return state.datasets[dataset]?.mapping ?? {};
 }
 
 function runComparison() {
@@ -329,7 +321,12 @@ function runComparison() {
 
   state.missing = missing;
   state.storytelWindowCount = windowCount;
-  state.lastRunTs = new Date();
+  state.missingDurationSeconds = missing.reduce((total, item) => {
+    if (typeof item.durationSeconds === "number" && !Number.isNaN(item.durationSeconds)) {
+      return total + item.durationSeconds;
+    }
+    return total;
+  }, 0);
   statusEl.textContent = `Compared ${windowCount} listens · ${missing.length} missing`;
   searchInput.disabled = false;
   searchInput.value = "";
@@ -387,6 +384,13 @@ function parseEndDateInput(value) {
   }
   date.setHours(23, 59, 59, 999);
   return date;
+}
+
+function isDateRangeValid(start, end) {
+  if (!start || !end) {
+    return true;
+  }
+  return start.getTime() <= end.getTime();
 }
 
 function extractDate(value) {
@@ -473,13 +477,9 @@ function renderResults() {
   }
   document.getElementById("storytel-count").textContent = state.storytelWindowCount;
   document.getElementById("missing-count").textContent = state.missing.length;
-  document.getElementById("last-run").textContent = state.lastRunTs
-    ? new Intl.DateTimeFormat(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }).format(state.lastRunTs)
-    : "—";
+  document.getElementById("missing-hours").textContent = formatMissingHours(
+    state.missingDurationSeconds
+  );
   updateSortIndicators();
 }
 
@@ -643,6 +643,63 @@ function formatDuration(seconds) {
     display = parts.join(" ");
   }
   return `<span class="duration-chip">${escapeHtml(display)}</span>`;
+}
+
+function formatMissingHours(totalSeconds) {
+  if (!totalSeconds || Number.isNaN(totalSeconds)) {
+    return "—";
+  }
+  const hours = totalSeconds / 3600;
+  if (hours < 0.1) {
+    return "<0.1h";
+  }
+  const precision = hours >= 100 ? 0 : hours >= 10 ? 1 : 2;
+  return `${hours.toFixed(precision)}h`;
+}
+
+function deriveColumnMapping(dataset, headers = []) {
+  const supportedFields = datasetConfig[dataset]?.supportedFields || [];
+  if (!supportedFields.length || !headers.length) {
+    return {};
+  }
+  const normalizedHeaders = headers.map((header) => ({
+    original: header,
+    normalized: header.toLowerCase(),
+  }));
+  const taken = new Set();
+  const mapping = {};
+
+  supportedFields.forEach((field) => {
+    const heuristicsMatch = normalizedHeaders.find(({ original, normalized }) => {
+      if (taken.has(original)) {
+        return false;
+      }
+      return (heuristics[field] || []).some((keyword) => normalized.includes(keyword));
+    });
+    if (heuristicsMatch) {
+      taken.add(heuristicsMatch.original);
+      mapping[field] = heuristicsMatch.original;
+      return;
+    }
+    const fallbackMatch = headers.find((header) => {
+      if (taken.has(header)) {
+        return false;
+      }
+      return (datasetColumnHints[dataset]?.[field] || []).some(
+        (hint) => header.toLowerCase() === hint.toLowerCase()
+      );
+    });
+    if (fallbackMatch) {
+      taken.add(fallbackMatch);
+      mapping[field] = fallbackMatch;
+    }
+  });
+
+  return mapping;
+}
+
+function toFieldLabel(field) {
+  return fieldLabels[field] || field;
 }
 
 function escapeHtml(value) {

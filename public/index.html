@@ -33,8 +33,8 @@
         <p>Workflow</p>
         <ol>
           <li>Drop in both exports.</li>
-          <li>Select the columns to compare.</li>
-          <li>Filter by date, search, then export the gap.</li>
+          <li>Columns auto-detected for you.</li>
+          <li>Filter by date and search the gap.</li>
         </ol>
       </div>
     </header>
@@ -42,8 +42,8 @@
     <main>
       <section class="panel" id="upload-panel">
         <div class="panel-heading">
-          <h2>1 · Upload and map columns</h2>
-          <p>Provide both CSV files and tell the tool which columns contain the essentials.</p>
+          <h2>1 · Upload both exports</h2>
+          <p>Provide both CSV files and the tool will lock in the key columns automatically.</p>
         </div>
         <div class="export-links">
           <a href="https://www.goodreads.com/review/import" target="_blank" rel="noreferrer noopener">
@@ -68,20 +68,7 @@
             </label>
             <p class="file-name" id="goodreads-file">No file yet</p>
             <p class="status" id="goodreads-status">Awaiting file</p>
-            <div class="select-grid" aria-live="polite">
-              <label>
-                Title column
-                <select id="goodreads-title"></select>
-              </label>
-              <label>
-                Author column
-                <select id="goodreads-author"></select>
-              </label>
-              <label>
-                Finished date column
-                <select id="goodreads-date"></select>
-              </label>
-            </div>
+            <p class="hint">Columns snap into place automatically once the CSV loads.</p>
           </article>
 
           <article class="upload-card" data-source="storytel">
@@ -98,29 +85,7 @@
             </label>
             <p class="file-name" id="storytel-file">No file yet</p>
             <p class="status" id="storytel-status">Awaiting file</p>
-            <div class="select-grid" aria-live="polite">
-              <label>
-                Title column
-                <select id="storytel-title"></select>
-              </label>
-              <label>
-                Author column
-                <select id="storytel-author"></select>
-              </label>
-              <label>
-                Started date column
-                <select id="storytel-started"></select>
-              </label>
-              <label>
-                Duration (seconds) column
-                <select id="storytel-duration"></select>
-              </label>
-              <label>
-                Finished date column
-                <select id="storytel-date"></select>
-              </label>
-            </div>
-            <p class="hint">Storytel exports skip author names—leave that dropdown blank if it is missing.</p>
+            <p class="hint">Columns auto-detected based on common Storytel headers—warnings appear if something is missing.</p>
           </article>
         </div>
       </section>
@@ -167,8 +132,8 @@
             <p class="stat-value" id="missing-count">0</p>
           </div>
           <div>
-            <p class="stat-label">Last comparison</p>
-            <p class="stat-value" id="last-run">—</p>
+            <p class="stat-label">Hours missing in Goodreads</p>
+            <p class="stat-value" id="missing-hours">—</p>
           </div>
         </div>
         <div class="table-wrapper">
@@ -211,6 +176,12 @@
             </tbody>
           </table>
         </div>
+        <aside class="note" aria-live="polite">
+          <p class="note-title">Why are authors not shown?</p>
+          <p class="note-body">
+            Storytel’s CSV export only includes the book title, so author details are unavailable and the comparison can’t produce import-ready records.
+          </p>
+        </aside>
       </section>
     </main>
 
